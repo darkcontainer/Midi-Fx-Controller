@@ -18,7 +18,7 @@ MIDI_CREATE_DEFAULT_INSTANCE();
 //---How many buttons are connected directly to pins?---------
 byte NUMBER_BUTTONS = 0;
 //---How many potentiometers are connected directly to pins?--
-byte NUMBER_POTS = 1;
+byte NUMBER_POTS = 2;
 //---How many buttons are connected to a multiplexer?---------
 byte NUMBER_MUX_BUTTONS = 0;
 //---How many potentiometers are connected to a multiplexer?--
@@ -42,14 +42,14 @@ byte NUMBER_MUX_POTS = 0;
 //**Command parameter is for future use**
 
 Pot PO1(A0, 0, 1, 1);
-//Pot PO2(A1, 0, 10, 1);
+Pot PO2(A1, 0, 10, 1);
 //Pot PO3(A2, 0, 22, 1);
 //Pot PO4(A3, 0, 118, 1);
 //Pot PO5(A4, 0, 30, 1);
 //Pot PO6(A5, 0, 31, 1);
 //*******************************************************************
 //Add pots used to array below like this->  Pot *POTS[] {&PO1, &PO2, &PO3, &PO4, &PO5, &PO6};
-Pot *POTS[] {&PO1};
+Pot *POTS[] {&PO1, &PO2};
 //*******************************************************************
 
 
