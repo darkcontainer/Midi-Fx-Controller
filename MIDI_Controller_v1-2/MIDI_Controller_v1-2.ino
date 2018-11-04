@@ -1,3 +1,4 @@
+//#include <EEPROM.h>
 #include <MIDI.h>
 #include "Controller.h"
 
@@ -12,13 +13,12 @@
 
 MIDI_CREATE_DEFAULT_INSTANCE();
 
+#define _CAL 12  // Calibration pin.
+#define _LED 13  // Led.
+
 //************************************************************
 //***SET THE NUMBER OF CONTROLS USED**************************
 //************************************************************
-//---How many buttons are connected directly to pins?---------
-byte NUMBER_BUTTONS = 0;
-//---How many potentiometers are connected directly to pins?--
-byte NUMBER_POTS = 2;
 //---How many buttons are connected to a multiplexer?---------
 byte NUMBER_MUX_BUTTONS = 0;
 //---How many potentiometers are connected to a multiplexer?--
@@ -31,11 +31,9 @@ byte NUMBER_MUX_POTS = 0;
 //*******************************************************************
 //Mux NAME (OUTPUT PIN, , How Many Mux Pins?(8 or 16) , Is It Analog?);
 
-
 //Mux M1(10, 16, false); //Digital multiplexer on Arduino pin 10
-//Mux M2(A5, 8, true); //Analog multiplexer on Arduino analog pin A0
+//Mux M2(A5, 8, true); //Analog multiplexer on Arduino analog pin A5
 //*******************************************************************
-
 
 //***DEFINE DIRECTLY CONNECTED POTENTIOMETERS************************
 //Pot (Pin Number, Command, CC Control, Channel Number)
@@ -48,10 +46,11 @@ Pot PO2(A1, 0, 10, 1);
 //Pot PO5(A4, 0, 30, 1);
 //Pot PO6(A5, 0, 31, 1);
 //*******************************************************************
+//---How many potentiometers are connected directly to pins?--
+byte NUMBER_POTS = 2;
 //Add pots used to array below like this->  Pot *POTS[] {&PO1, &PO2, &PO3, &PO4, &PO5, &PO6};
-Pot *POTS[] {&PO1, &PO2};
+Pot *POTS[]{&PO1, &PO2};
 //*******************************************************************
-
 
 //***DEFINE DIRECTLY CONNECTED BUTTONS*******************************
 //Button (Pin Number, Command, Note Number, Channel, Debounce Time)
@@ -65,11 +64,13 @@ Pot *POTS[] {&PO1, &PO2};
 //Button BU6(7, 0, 65, 1, 5 );
 //Button BU7(8, 1, 64, 1, 5 );
 //Button BU8(9, 2, 64, 1, 5 );
+//Button CAL(12, 0, 60, 1, 5 ); // Calibration button. Don't put in the pointer array.
 //*******************************************************************
+//---How many buttons are connected directly to pins?---------
+byte NUMBER_BUTTONS = 0;
 //Add buttons used to array below like this->  Button *BUTTONS[] {&BU1, &BU2, &BU3, &BU4, &BU5, &BU6, &BU7, &BU8};
-Button *BUTTONS[] {};
+Button *BUTTONS[]{};
 //*******************************************************************
-
 
 //***DEFINE BUTTONS CONNECTED TO MULTIPLEXER*************************
 //Button::Button(Mux mux, byte muxpin, byte command, byte value, byte channel, byte debounce)
@@ -93,10 +94,9 @@ Button *BUTTONS[] {};
 //Button MBU16(M1, 15, 0, 85, 1, 5);
 //*******************************************************************
 ////Add multiplexed buttons used to array below like this->  Button *MUXBUTTONS[] {&MBU1, &MBU2, &MBU3, &MBU4, &MBU5, &MBU6.....};
-Button *MUXBUTTONS[] {};
+Button *MUXBUTTONS[]{};
 
 //*******************************************************************
-
 
 //***DEFINE POTENTIOMETERS CONNECTED TO MULTIPLEXER*******************
 //Pot::Pot(Mux mux, byte muxpin, byte command, byte control, byte channel)
@@ -120,120 +120,140 @@ Button *MUXBUTTONS[] {};
 //Pot MPO16(M2, 15, 0, 55, 2);
 //*******************************************************************
 //Add multiplexed pots used to array below like this->  Pot *MUXPOTS[] {&MPO1, &MPO2, &MPO3, &MPO4, &MPO5, &MPO6.....};
-Pot *MUXPOTS[] {};
+Pot *MUXPOTS[]{};
 //*******************************************************************
 
-
 void setup() {
-  MIDI.begin(MIDI_CHANNEL_OFF);
+	pinMode(_CAL, INPUT_PULLUP);
+
+	MIDI.begin(MIDI_CHANNEL_OFF);
+
+	bButtDown = buttonPushed(_CAL);
+	if (bButtDown) {
+		// Enter calibration procedure.
+		digitalWrite(_LED, HIGH);
+		while (true) {
+			//	bButtDown = bButtDown && !buttonPushed(_CAL);
+			calibratePots();
+			if (!buttonPushed(_CAL) && bButtDown) {
+				bButtDown = false;                          // Button was released.
+			} else if (buttonPushed(_CAL) && !bButtDown) {  //TODO? Debounce?
+				break;                                      // Button was pushed a 2nd time. Exit callibration.
+			}
+		}
+		digitalWrite(_LED, LOW);
+	}
 }
 
 void loop() {
-  if (NUMBER_BUTTONS != 0) updateButtons();
-  if (NUMBER_POTS != 0) updatePots();
-  if (NUMBER_MUX_BUTTONS != 0) updateMuxButtons();
-  if (NUMBER_MUX_POTS != 0) updateMuxPots();
+	if (NUMBER_BUTTONS != 0) updateButtons();
+	if (NUMBER_POTS != 0) updatePots();
+	if (NUMBER_MUX_BUTTONS != 0) updateMuxButtons();
+	if (NUMBER_MUX_POTS != 0) updateMuxPots();
 }
-
 
 //*****************************************************************
 void updateButtons() {
+	// Cycle through Button array
+	for (int i = 0; i < NUMBER_BUTTONS; i = i + 1) {
+		byte message = BUTTONS[i]->getValue();
 
-  // Cycle through Button array
-  for (int i = 0; i < NUMBER_BUTTONS; i = i + 1) {
-    byte message = BUTTONS[i]->getValue();
+		//  Button is pressed
+		if (message == 0) {
+			switch (BUTTONS[i]->Bcommand) {
+				case 0:  //Note
+					MIDI.sendNoteOn(BUTTONS[i]->Bvalue, 127, BUTTONS[i]->Bchannel);
+					break;
+				case 1:  //CC
+					MIDI.sendControlChange(BUTTONS[i]->Bvalue, 127, BUTTONS[i]->Bchannel);
+					break;
+				case 2:  //Toggle
+					if (BUTTONS[i]->Btoggle == 0) {
+						MIDI.sendControlChange(BUTTONS[i]->Bvalue, 127, BUTTONS[i]->Bchannel);
+						BUTTONS[i]->Btoggle = 1;
+					} else if (BUTTONS[i]->Btoggle == 1) {
+						MIDI.sendControlChange(BUTTONS[i]->Bvalue, 0, BUTTONS[i]->Bchannel);
+						BUTTONS[i]->Btoggle = 0;
+					}
+					break;
+			}
+		}
 
-    //  Button is pressed
-    if (message == 0) {
-      switch (BUTTONS[i]->Bcommand) {
-        case 0: //Note
-          MIDI.sendNoteOn(BUTTONS[i]->Bvalue, 127, BUTTONS[i]->Bchannel);
-          break;
-        case 1: //CC
-          MIDI.sendControlChange(BUTTONS[i]->Bvalue, 127, BUTTONS[i]->Bchannel);
-          break;
-        case 2: //Toggle
-          if (BUTTONS[i]->Btoggle == 0) {
-            MIDI.sendControlChange(BUTTONS[i]->Bvalue, 127, BUTTONS[i]->Bchannel);
-            BUTTONS[i]->Btoggle = 1;
-          }
-          else if (BUTTONS[i]->Btoggle == 1) {
-            MIDI.sendControlChange(BUTTONS[i]->Bvalue, 0, BUTTONS[i]->Bchannel);
-            BUTTONS[i]->Btoggle = 0;
-          }
-          break;
-      }
-    }
-
-    //  Button is not pressed
-    if (message == 1) {
-      switch (BUTTONS[i]->Bcommand) {
-        case 0:
-          MIDI.sendNoteOff(BUTTONS[i]->Bvalue, 0, BUTTONS[i]->Bchannel);
-          break;
-        case 1:
-          MIDI.sendControlChange(BUTTONS[i]->Bvalue, 0, BUTTONS[i]->Bchannel);
-          break;
-      }
-    }
-  }
+		//  Button is not pressed
+		if (message == 1) {
+			switch (BUTTONS[i]->Bcommand) {
+				case 0:
+					MIDI.sendNoteOff(BUTTONS[i]->Bvalue, 0, BUTTONS[i]->Bchannel);
+					break;
+				case 1:
+					MIDI.sendControlChange(BUTTONS[i]->Bvalue, 0, BUTTONS[i]->Bchannel);
+					break;
+			}
+		}
+	}
 }
 //*******************************************************************
 void updateMuxButtons() {
+	// Cycle through Mux Button array
+	for (int i = 0; i < NUMBER_MUX_BUTTONS; i = i + 1) {
+		MUXBUTTONS[i]->muxUpdate();
+		byte message = MUXBUTTONS[i]->getValue();
 
-  // Cycle through Mux Button array
-  for (int i = 0; i < NUMBER_MUX_BUTTONS; i = i + 1) {
-
-    MUXBUTTONS[i]->muxUpdate();
-    byte message = MUXBUTTONS[i]->getValue();
-
-    //  Button is pressed
-    if (message == 0) {
-      switch (MUXBUTTONS[i]->Bcommand) {
-        case 0: //Note
-          MIDI.sendNoteOn(MUXBUTTONS[i]->Bvalue, 127, MUXBUTTONS[i]->Bchannel);
-          break;
-        case 1: //CC
-          MIDI.sendControlChange(MUXBUTTONS[i]->Bvalue, 127, MUXBUTTONS[i]->Bchannel);
-          break;
-        case 2: //Toggle
-          if (MUXBUTTONS[i]->Btoggle == 0) {
-            MIDI.sendControlChange(MUXBUTTONS[i]->Bvalue, 127, MUXBUTTONS[i]->Bchannel);
-            MUXBUTTONS[i]->Btoggle = 1;
-          }
-          else if (MUXBUTTONS[i]->Btoggle == 1) {
-            MIDI.sendControlChange(MUXBUTTONS[i]->Bvalue, 0, MUXBUTTONS[i]->Bchannel);
-            MUXBUTTONS[i]->Btoggle = 0;
-          }
-          break;
-      }
-    }
-    //  Button is not pressed
-    if (message == 1) {
-      switch (MUXBUTTONS[i]->Bcommand) {
-        case 0:
-          MIDI.sendNoteOff(MUXBUTTONS[i]->Bvalue, 0, MUXBUTTONS[i]->Bchannel);
-          break;
-        case 1:
-          MIDI.sendControlChange(MUXBUTTONS[i]->Bvalue, 0, MUXBUTTONS[i]->Bchannel);
-          break;
-      }
-    }
-  }
+		//  Button is pressed
+		if (message == 0) {
+			switch (MUXBUTTONS[i]->Bcommand) {
+				case 0:  //Note
+					MIDI.sendNoteOn(MUXBUTTONS[i]->Bvalue, 127, MUXBUTTONS[i]->Bchannel);
+					break;
+				case 1:  //CC
+					MIDI.sendControlChange(MUXBUTTONS[i]->Bvalue, 127, MUXBUTTONS[i]->Bchannel);
+					break;
+				case 2:  //Toggle
+					if (MUXBUTTONS[i]->Btoggle == 0) {
+						MIDI.sendControlChange(MUXBUTTONS[i]->Bvalue, 127, MUXBUTTONS[i]->Bchannel);
+						MUXBUTTONS[i]->Btoggle = 1;
+					} else if (MUXBUTTONS[i]->Btoggle == 1) {
+						MIDI.sendControlChange(MUXBUTTONS[i]->Bvalue, 0, MUXBUTTONS[i]->Bchannel);
+						MUXBUTTONS[i]->Btoggle = 0;
+					}
+					break;
+			}
+		}
+		//  Button is not pressed
+		if (message == 1) {
+			switch (MUXBUTTONS[i]->Bcommand) {
+				case 0:
+					MIDI.sendNoteOff(MUXBUTTONS[i]->Bvalue, 0, MUXBUTTONS[i]->Bchannel);
+					break;
+				case 1:
+					MIDI.sendControlChange(MUXBUTTONS[i]->Bvalue, 0, MUXBUTTONS[i]->Bchannel);
+					break;
+			}
+		}
+	}
 }
 //***********************************************************************
 void updatePots() {
-  for (int i = 0; i < NUMBER_POTS; i = i + 1) {
-    byte potmessage = POTS[i]->getValue();
-    if (potmessage != 255) MIDI.sendControlChange(POTS[i]->Pcontrol, potmessage, POTS[i]->Pchannel);
-  }
+	for (int i = 0; i < NUMBER_POTS; i = i + 1) {
+		byte potmessage = POTS[i]->getValue();
+		if (potmessage != 255) MIDI.sendControlChange(POTS[i]->Pcontrol, potmessage, POTS[i]->Pchannel);
+	}
 }
 //***********************************************************************
 void updateMuxPots() {
-  for (int i = 0; i < NUMBER_MUX_POTS; i = i + 1) {
-    MUXPOTS[i]->muxUpdate();
-    byte potmessage = MUXPOTS[i]->getValue();
-    if (potmessage != 255) MIDI.sendControlChange(MUXPOTS[i]->Pcontrol, potmessage, MUXPOTS[i]->Pchannel);
-  }
+	for (int i = 0; i < NUMBER_MUX_POTS; i = i + 1) {
+		MUXPOTS[i]->muxUpdate();
+		byte potmessage = MUXPOTS[i]->getValue();
+		if (potmessage != 255) MIDI.sendControlChange(MUXPOTS[i]->Pcontrol, potmessage, MUXPOTS[i]->Pchannel);
+	}
 }
 
+void calibratePots() {
+	for (int i = 0; i < NUMBER_POTS; i = i + 1) {
+		// Ignore all changes below 50% (511 for analogue, 63 for velocity).
+		POTS[i]->calibrate();
+	}
+}
+bool buttonPushed(byte pin) {
+	return (digitalRead(pin) == LOW);
+}

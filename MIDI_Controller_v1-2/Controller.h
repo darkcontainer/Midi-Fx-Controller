@@ -51,6 +51,7 @@ class Pot
     void muxUpdate();
     void newValue(byte command, byte value, byte channel);
     byte getValue();
+    void calibrate();
     byte Pcommand;
     byte Pcontrol;
     byte Pchannel;
@@ -62,6 +63,10 @@ class Pot
     byte _control;
     int _value;
     int _oldValue;
+    bool _cal;
+    int _calHigh;
+    int _calLow;
+    //void getLoadCal();
     bool _changed;
     byte _enablepin;
 };
