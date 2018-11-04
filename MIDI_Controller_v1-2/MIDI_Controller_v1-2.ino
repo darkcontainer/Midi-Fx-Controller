@@ -1,6 +1,7 @@
 //#include <EEPROM.h>
-#include <MIDI.h>
+#include "lib\MIDI.h"
 #include "Controller.h"
+
 
 /*************************************************************
   MIDI CONTROLLER
@@ -127,8 +128,9 @@ void setup() {
 	pinMode(_CAL, INPUT_PULLUP);
 
 	MIDI.begin(MIDI_CHANNEL_OFF);
+//  Serial.begin(115200);
 
-	bButtDown = buttonPushed(_CAL);
+	bool bButtDown = buttonPushed(_CAL);
 	if (bButtDown) {
 		// Enter calibration procedure.
 		digitalWrite(_LED, HIGH);
@@ -249,11 +251,12 @@ void updateMuxPots() {
 }
 
 void calibratePots() {
-	for (int i = 0; i < NUMBER_POTS; i = i + 1) {
-		// Ignore all changes below 50% (511 for analogue, 63 for velocity).
+	for (int i = 0; i < NUMBER_POTS; i++) {
 		POTS[i]->calibrate();
 	}
+//  Serial.println("");
+//  delay(500);
 }
-bool buttonPushed(byte pin) {
-	return (digitalRead(pin) == LOW);
+bool buttonPushed(byte buttonPin) {
+	return (digitalRead(buttonPin) == LOW);
 }

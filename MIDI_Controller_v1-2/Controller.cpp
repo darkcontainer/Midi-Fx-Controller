@@ -106,6 +106,7 @@ void Button::newValue(byte command, byte value, byte channel) {
 Pot::Pot(byte pin, byte command, byte control, byte channel) {
 	_pin = pin;
 	_control = control;
+  _cal = false;
 	_calHigh = 1023;
 	_calLow = 0;
 	_value = 0;
@@ -144,20 +145,32 @@ Pot::Pot(Mux mux, byte muxpin, byte command, byte control, byte channel) {
 }
 void Pot::calibrate() {
 	int tmp = analogRead(_pin);
-	if (tmp > 511) {
-		_cal = true;
-		if (tmp > _calHigh) {
-			_calHigh = tmp;
-		}
-	} else if (_cal) {
-		if (_calLow < tmp) {
-			_calLow = tmp;
-		}
+  int thresh = 511;
+  // Ignore all changes below 50% (511 for analogue, 63 for velocity).
+	if (tmp > thresh && !_cal) {
+    _cal = true;
+    _calHigh = tmp;
+    _calLow = thresh;
 	}
+  if (_cal && tmp > _calHigh) {
+		_calHigh = tmp;
+	} else if (_cal && tmp < _calLow) {
+		_calLow = tmp;
+	}
+// if (_cal){
+//  Serial.print("Low:  ");
+//  Serial.print(_calLow,DEC);
+//  Serial.print("  High: ");
+//  Serial.print(_calHigh,DEC);
+//  Serial.print("  ");
+// }
 }
 byte Pot::getValue() {
+  _value = analogRead(_pin);
 	// Apply calibration (this is just a simplified version of the map() function).
-	_value = (analogRead(_pin) - _calLow) * 1023 / (_calHigh - _calLow);
+  // (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+  //_value = ((_value - _calLow) * (int)1023) / (_calHigh - _calLow); // Does not work. I don't know why.
+  _value = map(_value, _calLow, _calHigh, 0, 1023);
     
 	// Apply upper and lower limits for if it overshot (otherwise we get over/under flow).
 	if (_value > 1023) {
@@ -165,7 +178,7 @@ byte Pot::getValue() {
 	} else if (_value < 0) {
 		_value = 0;
 	}
-
+  
 	int diff = (_oldValue - _value);
 	if (diff >= 8 || diff <= -8) {
 		_oldValue = _value >> 3;
