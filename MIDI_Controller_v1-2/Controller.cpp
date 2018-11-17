@@ -1,4 +1,4 @@
-
+#include "lib\EEPROM.h"
 #include "Controller.h"
 
 //****************************************************************************************
@@ -16,8 +16,7 @@ Mux::Mux(byte outpin_, byte numPins_, bool analog_) {
 }
 //****************************************************************************************
 // Button (Pin Number, Command, Note Number, Channel, Debounce Time)
-Button::Button(byte pin, byte command, byte value, byte channel,
-			   byte debounce) {
+Button::Button(byte pin, byte command, byte value, byte channel, byte debounce) {
 	_pin = pin;
 	pinMode(_pin, INPUT_PULLUP);
 	_value = value;
@@ -33,8 +32,7 @@ Button::Button(byte pin, byte command, byte value, byte channel,
 	Btoggle = 0;
 }
 
-Button::Button(Mux mux, byte muxpin, byte command, byte value, byte channel,
-			   byte debounce) {
+Button::Button(Mux mux, byte muxpin, byte command, byte value, byte channel, byte debounce) {
 	_pin = mux.outpin;
 	_numMuxPins = mux.numPins;
 	_muxpin = muxpin;
@@ -164,6 +162,29 @@ void Pot::calibrate() {
 //  Serial.print(_calHigh,DEC);
 //  Serial.print("  ");
 // }
+}
+void Pot::calLoad(int iAddress) {
+	int iVal = 0;
+	EEPROM.get( iAddress, iVal );
+	_calLow = iVal;
+	iAddress += sizeof(int);
+	EEPROM.get( iAddress, iVal );
+	_calHigh = iVal;
+}
+void Pot::calSave(int iAddress) {
+	int iVal = 0;
+
+	EEPROM.get( iAddress, iVal );
+	if(iVal!=_calLow){
+		EEPROM.put(iAddress,_calLow);
+	}
+
+	iAddress += sizeof(int);
+
+	EEPROM.get( iAddress, iVal );
+	if(iVal!=_calHigh){
+		EEPROM.put(iAddress,_calHigh);
+	}
 }
 byte Pot::getValue() {
   _value = analogRead(_pin);

@@ -52,6 +52,8 @@ class Pot
     void newValue(byte command, byte value, byte channel);
     byte getValue();
     void calibrate();
+    void calLoad(int iAddress);
+    void calSave(int iAddress);
     byte Pcommand;
     byte Pcontrol;
     byte Pchannel;

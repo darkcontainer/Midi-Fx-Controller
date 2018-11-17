@@ -1,4 +1,4 @@
-//#include <EEPROM.h>
+#include "lib\EEPROM.h"
 #include "lib\MIDI.h"
 #include "Controller.h"
 
@@ -129,6 +129,7 @@ void setup() {
 
 	MIDI.begin(MIDI_CHANNEL_OFF);
 //  Serial.begin(115200);
+	loadPots();
 
 	bool bButtDown = buttonPushed(_CAL);
 	if (bButtDown) {
@@ -143,6 +144,7 @@ void setup() {
 				break;                                      // Button was pushed a 2nd time. Exit callibration.
 			}
 		}
+		savePots();
 		digitalWrite(_LED, LOW);
 	}
 }
@@ -249,13 +251,26 @@ void updateMuxPots() {
 		if (potmessage != 255) MIDI.sendControlChange(MUXPOTS[i]->Pcontrol, potmessage, MUXPOTS[i]->Pchannel);
 	}
 }
-
 void calibratePots() {
 	for (int i = 0; i < NUMBER_POTS; i++) {
 		POTS[i]->calibrate();
 	}
-//  Serial.println("");
-//  delay(500);
+}
+void loadPots(){
+	for (int i = 0; i < NUMBER_POTS; i++) {
+		// Each pot has two ints (_calLow and _calHigh).
+		// Each int is two bytes.
+		// Therefore each pot occupies 4 bytes/addresses.
+		POTS[i]->calLoad(i*sizeof(int)*2);
+	}
+}
+void savePots(){
+	for (int i = 0; i < NUMBER_POTS; i++) {
+		// Each pot has two ints (_calLow and _calHigh).
+		// Each int is two bytes.
+		// Therefore each pot occupies 4 bytes/addresses.
+		POTS[i]->calSave(i*sizeof(int)*2);
+	}
 }
 bool buttonPushed(byte buttonPin) {
 	return (digitalRead(buttonPin) == LOW);
