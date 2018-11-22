@@ -1,8 +1,8 @@
 #include "Controller.h"
 #include "lib\EEPROM.h"
-#include "lib/MIDIUSB.h"
-//#include "lib\MIDI.h"
-
+#include <MIDIUSB.h>
+#include "lib\MIDI.h"
+//#include "lib\MIDI_Interfaces\USBMIDI_Interface.h"
 /*************************************************************
   MIDI CONTROLLER
 
@@ -11,9 +11,9 @@
 
   Version 1.2 **Arduino UNO ONLY!**
  *************************************************************/
-#define USB 1  // 1 = Midi over usb; 0 = Midi over serial.
+#define USB 1 // 1 = Midi over usb; 0 = Midi over serial.
 
-#if USB!=1
+#if USB != 1
 MIDI_CREATE_DEFAULT_INSTANCE();
 #endif
 
@@ -44,7 +44,7 @@ byte NUMBER_MUX_POTS = 0;
 //**Command parameter is for future use**
 
 Pot PO1(A0, 0, 1, 1);
-Pot PO2(A1, 0, 10, 1);
+Pot PO2(A1, 0, 10, 2);
 //Pot PO3(A2, 0, 22, 1);
 //Pot PO4(A3, 0, 118, 1);
 //Pot PO5(A4, 0, 30, 1);
@@ -60,7 +60,7 @@ Pot *POTS[]{&PO1, &PO2};
 //Button (Pin Number, Command, Note Number, Channel, Debounce Time)
 //** Command parameter 0=NOTE  1=CC  2=Toggle CC **
 
-//Button BU1(2, 0, 60, 1, 5 );
+Button BU1(2, 2, 60, 1, 5 );
 //Button BU2(3, 0, 61, 1, 5 );
 //Button BU3(4, 0, 62, 1, 5 );
 //Button BU4(5, 0, 63, 1, 5 );
@@ -71,9 +71,9 @@ Pot *POTS[]{&PO1, &PO2};
 //Button CAL(12, 0, 60, 1, 5 ); // Calibration button. Don't put in the pointer array.
 //*******************************************************************
 //---How many buttons are connected directly to pins?---------
-byte NUMBER_BUTTONS = 0;
+byte NUMBER_BUTTONS = 1;
 //Add buttons used to array below like this->  Button *BUTTONS[] {&BU1, &BU2, &BU3, &BU4, &BU5, &BU6, &BU7, &BU8};
-Button *BUTTONS[]{};
+Button *BUTTONS[]{&BU1};
 //*******************************************************************
 
 //***DEFINE BUTTONS CONNECTED TO MULTIPLEXER*************************
@@ -130,7 +130,7 @@ Pot *MUXPOTS[]{};
 void setup() {
 	pinMode(_CAL, INPUT_PULLUP);
 
-#if USB!=1
+#if USB != 1
 	MIDI.begin(MIDI_CHANNEL_OFF);
 #endif
 	//  Serial.begin(115200);
@@ -164,35 +164,36 @@ void midiNoteOn(uint8_t inNoteNumber, uint8_t inVelocity, uint8_t inChannel) {
 	if (USB) {
 		midiEventPacket_t noteOn = {0x09, 0x90 | inChannel, inNoteNumber, inVelocity};
 		MidiUSB.sendMIDI(noteOn);
-		//MidiUSB.flush();
+		MidiUSB.flush();
 
 	} else {
-#if USB!=1
+#if USB != 1
 		MIDI.sendNoteOn(inNoteNumber, inVelocity, inChannel);
-		#endif
+#endif
 	}
 }
 void midiNoteOff(uint8_t inNoteNumber, uint8_t inVelocity, uint8_t inChannel) {
 	if (USB) {
 		midiEventPacket_t noteOff = {0x08, 0x80 | inChannel, inNoteNumber, inVelocity};
 		MidiUSB.sendMIDI(noteOff);
-		//MidiUSB.flush();
+		MidiUSB.flush();
 
 	} else {
-#if USB!=1
+#if USB != 1
 		MIDI.sendNoteOff(inNoteNumber, inVelocity, inChannel);
-		#endif
+#endif
 	}
 }
 void ccfuck(uint8_t inControlNumber, uint8_t inControlValue, uint8_t inChannel) {
-	if (USB) {
+	if (USB==1) {
+		
 		midiEventPacket_t change = {0x0B, 0xB0 | inChannel, inControlNumber, inControlValue};
 		MidiUSB.sendMIDI(change);
-		//MidiUSB.flush();
+		MidiUSB.flush();
 	} else {
-#if USB!=1
+#if USB != 1
 		MIDI.sendControlChange(inControlNumber, inControlValue, inChannel);
-		#endif
+#endif
 	}
 }
 
@@ -280,7 +281,10 @@ void updateMuxButtons() {
 void updatePots() {
 	for (int i = 0; i < NUMBER_POTS; i = i + 1) {
 		byte potmessage = POTS[i]->getValue();
-		if (potmessage != 255) ccfuck(POTS[i]->Pcontrol, potmessage, POTS[i]->Pchannel);
+		
+		if (potmessage != 255) {
+			ccfuck(POTS[i]->Pcontrol, potmessage, POTS[i]->Pchannel);
+		}
 	}
 }
 //***********************************************************************
