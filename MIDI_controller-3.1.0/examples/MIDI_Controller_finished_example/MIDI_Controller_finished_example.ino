@@ -16,7 +16,7 @@
   Written by tttapa, 07-09-2017
   https://github.com/tttapa/MIDI_controller
 */
-#define USE_ROTARY_ENCODER
+//#define USE_ROTARY_ENCODER
 #include <MIDI_Controller.h>
 
 const uint8_t velocity = 0b01111111; // The velocity of the buttons (0b01111111 = 127 = 100%)
@@ -55,7 +55,7 @@ DigitalLatch switches[] = {
     {7, 0x13, 1, velocity, latchTime},
 };
 
-RotaryEncoder enc = {1, 0, 0x2F, 1, speedMultiply, NORMAL_ENCODER, TWOS_COMPLEMENT}; // Create a new instance of class 'RotaryEncoder' called enc, on pins 1 and 0, controller number 0x2F, on MIDI channel 1, at normal speed, using a normal encoder (4 pulses per click/step), using the TWOS_COMPLEMENT sign option
+//RotaryEncoder enc = {1, 0, 0x2F, 1, speedMultiply, NORMAL_ENCODER, TWOS_COMPLEMENT}; // Create a new instance of class 'RotaryEncoder' called enc, on pins 1 and 0, controller number 0x2F, on MIDI channel 1, at normal speed, using a normal encoder (4 pulses per click/step), using the TWOS_COMPLEMENT sign option
 
 Bank bank(4); // A bank with four channels
 
