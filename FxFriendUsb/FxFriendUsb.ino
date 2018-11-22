@@ -1,8 +1,7 @@
-#include "lib\EEPROM.h"
-#include "lib\MIDI.h"
-#include "lib\MIDIUSB.h"
 #include "Controller.h"
-
+#include "lib\EEPROM.h"
+#include "lib/MIDIUSB.h"
+//#include "lib\MIDI.h"
 
 /*************************************************************
   MIDI CONTROLLER
@@ -12,8 +11,11 @@
 
   Version 1.2 **Arduino UNO ONLY!**
  *************************************************************/
+#define USB 1  // 1 = Midi over usb; 0 = Midi over serial.
 
+#if USB!=1
 MIDI_CREATE_DEFAULT_INSTANCE();
+#endif
 
 #define _CAL 12  // Calibration pin.
 #define _LED 13  // Led.
@@ -128,8 +130,10 @@ Pot *MUXPOTS[]{};
 void setup() {
 	pinMode(_CAL, INPUT_PULLUP);
 
+#if USB!=1
 	MIDI.begin(MIDI_CHANNEL_OFF);
-//  Serial.begin(115200);
+#endif
+	//  Serial.begin(115200);
 	loadPots();
 
 	bool bButtDown = buttonPushed(_CAL);
@@ -156,6 +160,41 @@ void loop() {
 	if (NUMBER_MUX_BUTTONS != 0) updateMuxButtons();
 	if (NUMBER_MUX_POTS != 0) updateMuxPots();
 }
+void midiNoteOn(uint8_t inNoteNumber, uint8_t inVelocity, uint8_t inChannel) {
+	if (USB) {
+		midiEventPacket_t noteOn = {0x09, 0x90 | inChannel, inNoteNumber, inVelocity};
+		MidiUSB.sendMIDI(noteOn);
+		//MidiUSB.flush();
+
+	} else {
+#if USB!=1
+		MIDI.sendNoteOn(inNoteNumber, inVelocity, inChannel);
+		#endif
+	}
+}
+void midiNoteOff(uint8_t inNoteNumber, uint8_t inVelocity, uint8_t inChannel) {
+	if (USB) {
+		midiEventPacket_t noteOff = {0x08, 0x80 | inChannel, inNoteNumber, inVelocity};
+		MidiUSB.sendMIDI(noteOff);
+		//MidiUSB.flush();
+
+	} else {
+#if USB!=1
+		MIDI.sendNoteOff(inNoteNumber, inVelocity, inChannel);
+		#endif
+	}
+}
+void ccfuck(uint8_t inControlNumber, uint8_t inControlValue, uint8_t inChannel) {
+	if (USB) {
+		midiEventPacket_t change = {0x0B, 0xB0 | inChannel, inControlNumber, inControlValue};
+		MidiUSB.sendMIDI(change);
+		//MidiUSB.flush();
+	} else {
+#if USB!=1
+		MIDI.sendControlChange(inControlNumber, inControlValue, inChannel);
+		#endif
+	}
+}
 
 //*****************************************************************
 void updateButtons() {
@@ -167,17 +206,17 @@ void updateButtons() {
 		if (message == 0) {
 			switch (BUTTONS[i]->Bcommand) {
 				case 0:  //Note
-					MIDI.sendNoteOn(BUTTONS[i]->Bvalue, 127, BUTTONS[i]->Bchannel);
+					midiNoteOn(BUTTONS[i]->Bvalue, 127, BUTTONS[i]->Bchannel);
 					break;
 				case 1:  //CC
-					MIDI.sendControlChange(BUTTONS[i]->Bvalue, 127, BUTTONS[i]->Bchannel);
+					ccfuck(BUTTONS[i]->Bvalue, 127, BUTTONS[i]->Bchannel);
 					break;
 				case 2:  //Toggle
 					if (BUTTONS[i]->Btoggle == 0) {
-						MIDI.sendControlChange(BUTTONS[i]->Bvalue, 127, BUTTONS[i]->Bchannel);
+						ccfuck(BUTTONS[i]->Bvalue, 127, BUTTONS[i]->Bchannel);
 						BUTTONS[i]->Btoggle = 1;
 					} else if (BUTTONS[i]->Btoggle == 1) {
-						MIDI.sendControlChange(BUTTONS[i]->Bvalue, 0, BUTTONS[i]->Bchannel);
+						ccfuck(BUTTONS[i]->Bvalue, 0, BUTTONS[i]->Bchannel);
 						BUTTONS[i]->Btoggle = 0;
 					}
 					break;
@@ -188,10 +227,10 @@ void updateButtons() {
 		if (message == 1) {
 			switch (BUTTONS[i]->Bcommand) {
 				case 0:
-					MIDI.sendNoteOff(BUTTONS[i]->Bvalue, 0, BUTTONS[i]->Bchannel);
+					midiNoteOff(BUTTONS[i]->Bvalue, 0, BUTTONS[i]->Bchannel);
 					break;
 				case 1:
-					MIDI.sendControlChange(BUTTONS[i]->Bvalue, 0, BUTTONS[i]->Bchannel);
+					ccfuck(BUTTONS[i]->Bvalue, 0, BUTTONS[i]->Bchannel);
 					break;
 			}
 		}
@@ -208,17 +247,17 @@ void updateMuxButtons() {
 		if (message == 0) {
 			switch (MUXBUTTONS[i]->Bcommand) {
 				case 0:  //Note
-					MIDI.sendNoteOn(MUXBUTTONS[i]->Bvalue, 127, MUXBUTTONS[i]->Bchannel);
+					midiNoteOn(MUXBUTTONS[i]->Bvalue, 127, MUXBUTTONS[i]->Bchannel);
 					break;
 				case 1:  //CC
-					MIDI.sendControlChange(MUXBUTTONS[i]->Bvalue, 127, MUXBUTTONS[i]->Bchannel);
+					ccfuck(MUXBUTTONS[i]->Bvalue, 127, MUXBUTTONS[i]->Bchannel);
 					break;
 				case 2:  //Toggle
 					if (MUXBUTTONS[i]->Btoggle == 0) {
-						MIDI.sendControlChange(MUXBUTTONS[i]->Bvalue, 127, MUXBUTTONS[i]->Bchannel);
+						ccfuck(MUXBUTTONS[i]->Bvalue, 127, MUXBUTTONS[i]->Bchannel);
 						MUXBUTTONS[i]->Btoggle = 1;
 					} else if (MUXBUTTONS[i]->Btoggle == 1) {
-						MIDI.sendControlChange(MUXBUTTONS[i]->Bvalue, 0, MUXBUTTONS[i]->Bchannel);
+						ccfuck(MUXBUTTONS[i]->Bvalue, 0, MUXBUTTONS[i]->Bchannel);
 						MUXBUTTONS[i]->Btoggle = 0;
 					}
 					break;
@@ -228,10 +267,10 @@ void updateMuxButtons() {
 		if (message == 1) {
 			switch (MUXBUTTONS[i]->Bcommand) {
 				case 0:
-					MIDI.sendNoteOff(MUXBUTTONS[i]->Bvalue, 0, MUXBUTTONS[i]->Bchannel);
+					midiNoteOff(MUXBUTTONS[i]->Bvalue, 0, MUXBUTTONS[i]->Bchannel);
 					break;
 				case 1:
-					MIDI.sendControlChange(MUXBUTTONS[i]->Bvalue, 0, MUXBUTTONS[i]->Bchannel);
+					ccfuck(MUXBUTTONS[i]->Bvalue, 0, MUXBUTTONS[i]->Bchannel);
 					break;
 			}
 		}
@@ -241,7 +280,7 @@ void updateMuxButtons() {
 void updatePots() {
 	for (int i = 0; i < NUMBER_POTS; i = i + 1) {
 		byte potmessage = POTS[i]->getValue();
-		if (potmessage != 255) MIDI.sendControlChange(POTS[i]->Pcontrol, potmessage, POTS[i]->Pchannel);
+		if (potmessage != 255) ccfuck(POTS[i]->Pcontrol, potmessage, POTS[i]->Pchannel);
 	}
 }
 //***********************************************************************
@@ -249,7 +288,7 @@ void updateMuxPots() {
 	for (int i = 0; i < NUMBER_MUX_POTS; i = i + 1) {
 		MUXPOTS[i]->muxUpdate();
 		byte potmessage = MUXPOTS[i]->getValue();
-		if (potmessage != 255) MIDI.sendControlChange(MUXPOTS[i]->Pcontrol, potmessage, MUXPOTS[i]->Pchannel);
+		if (potmessage != 255) ccfuck(MUXPOTS[i]->Pcontrol, potmessage, MUXPOTS[i]->Pchannel);
 	}
 }
 void calibratePots() {
@@ -257,20 +296,20 @@ void calibratePots() {
 		POTS[i]->calibrate();
 	}
 }
-void loadPots(){
+void loadPots() {
 	for (int i = 0; i < NUMBER_POTS; i++) {
 		// Each pot has two ints (_calLow and _calHigh).
 		// Each int is two bytes.
 		// Therefore each pot occupies 4 bytes/addresses.
-		POTS[i]->calLoad(i*sizeof(int)*2);
+		POTS[i]->calLoad(i * sizeof(int) * 2);
 	}
 }
-void savePots(){
+void savePots() {
 	for (int i = 0; i < NUMBER_POTS; i++) {
 		// Each pot has two ints (_calLow and _calHigh).
 		// Each int is two bytes.
 		// Therefore each pot occupies 4 bytes/addresses.
-		POTS[i]->calSave(i*sizeof(int)*2);
+		POTS[i]->calSave(i * sizeof(int) * 2);
 	}
 }
 bool buttonPushed(byte buttonPin) {

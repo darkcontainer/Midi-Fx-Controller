@@ -1,0 +1,5 @@
+{
+    "board": "arduino:avr:leonardo",
+    "port": "COM9",
+    "sketch": "FxFriendUsb\\FxFriendUsb.ino"
+}
