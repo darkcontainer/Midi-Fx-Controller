@@ -41,26 +41,28 @@ byte NUMBER_MUX_POTS = 0;
 
 //***DEFINE DIRECTLY CONNECTED POTENTIOMETERS************************
 //Pot (Pin Number, Command, CC Control, Channel Number)
-//**Command parameter is for future use**
+//Pot (Pin Number, Command, CC Control, Channel Number, Led Pin)
+//** Command parameter 0=Analogue CC  1=Button (CC)  2=Toggle Button (CC) **
+//** Led Type 0=None; 1=Normal; 2=Mux **
 
-Pot PO1(A0, 0, 1, 1, 13);
-Pot PO2(A1, 0, 10, 2);
-//Pot PO3(A2, 0, 22, 1);
-//Pot PO4(A3, 0, 118, 1);
+Pot PO1(A0, 1, 1, 1, 5);
+Pot PO2(A1, 2, 10, 1, 4);
+Pot PO3(A2, 2, 22, 1, 3);
+Pot PO4(A3, 2, 118, 1, 2);
 //Pot PO5(A4, 0, 30, 1);
 //Pot PO6(A5, 0, 31, 1);
 //*******************************************************************
 //---How many potentiometers are connected directly to pins?--
-byte NUMBER_POTS = 2;
+byte NUMBER_POTS = 4;
 //Add pots used to array below like this->  Pot *POTS[] {&PO1, &PO2, &PO3, &PO4, &PO5, &PO6};
-Pot *POTS[]{&PO1, &PO2};
+Pot *POTS[]{&PO1, &PO2, &PO3, &PO4};
 //*******************************************************************
 
 //***DEFINE DIRECTLY CONNECTED BUTTONS*******************************
 //Button (Pin Number, Command, Note Number, Channel, Debounce Time)
 //** Command parameter 0=NOTE  1=CC  2=Toggle CC **
 
-Button BU1(2, 2, 60, 1, 5);
+//Button BU1(2, 2, 60, 1, 5);
 //Button BU2(3, 0, 61, 1, 5 );
 //Button BU3(4, 0, 62, 1, 5 );
 //Button BU4(5, 0, 63, 1, 5 );
@@ -71,9 +73,9 @@ Button BU1(2, 2, 60, 1, 5);
 //Button CAL(12, 0, 60, 1, 5 ); // Calibration button. Don't put in the pointer array.
 //*******************************************************************
 //---How many buttons are connected directly to pins?---------
-byte NUMBER_BUTTONS = 1;
+byte NUMBER_BUTTONS = 0;
 //Add buttons used to array below like this->  Button *BUTTONS[] {&BU1, &BU2, &BU3, &BU4, &BU5, &BU6, &BU7, &BU8};
-Button *BUTTONS[]{&BU1};
+Button *BUTTONS[]{};
 //*******************************************************************
 
 //***DEFINE BUTTONS CONNECTED TO MULTIPLEXER*************************
@@ -201,10 +203,10 @@ void midiControlChange(uint8_t inControlNumber, uint8_t inControlValue, uint8_t 
 //*****************************************************************
 void updateButtons() {
     // Cycle through Button array
-    for (int i = 0; i < NUMBER_BUTTONS; i = i + 1) {
+    for (int i = 0; i < NUMBER_BUTTONS; i++) {
         byte message = BUTTONS[i]->getValue();
 
-        //  Button is pressed
+        //  Button is pressed.
         if (message == 0) {
             switch (BUTTONS[i]->Bcommand) {
                 case 0:  //Note
@@ -225,7 +227,7 @@ void updateButtons() {
             }
         }
 
-        //  Button is not pressed
+        //  Button is not released.
         if (message == 1) {
             switch (BUTTONS[i]->Bcommand) {
                 case 0:
@@ -241,7 +243,7 @@ void updateButtons() {
 //*******************************************************************
 void updateMuxButtons() {
     // Cycle through Mux Button array
-    for (int i = 0; i < NUMBER_MUX_BUTTONS; i = i + 1) {
+    for (int i = 0; i < NUMBER_MUX_BUTTONS; i++) {
         MUXBUTTONS[i]->muxUpdate();
         byte message = MUXBUTTONS[i]->getValue();
 
@@ -280,16 +282,39 @@ void updateMuxButtons() {
 }
 //***********************************************************************
 void updatePots() {
-    for (int i = 0; i < NUMBER_POTS; i = i + 1) {
+    for (int i = 0; i < NUMBER_POTS; i++) {
         byte potmessage = POTS[i]->getValue();
 
         if (potmessage != 255) {
-            midiControlChange(POTS[i]->Pcontrol, potmessage, POTS[i]->Pchannel);
+            switch (POTS[i]->Pcommand) {
+                case 0:  // Analogue
+                    midiControlChange(POTS[i]->Pcontrol, potmessage, POTS[i]->Pchannel);
+                    POTS[i]->Led(potmessage > 0);
+                    break;
 
-            if (potmessage > 0) {
-                POTS[i]->Led(true);
-            } else {
-                POTS[i]->Led(false);
+                case 1:  // Button
+                    if (potmessage == 0) {
+                        midiControlChange(POTS[i]->Pcontrol, 127, POTS[i]->Pchannel);
+                        POTS[i]->Led(true);
+                    } else {
+                        POTS[i]->Led(false);
+                        midiControlChange(POTS[i]->Pcontrol, 0, POTS[i]->Pchannel);
+                    }
+                    POTS[i]->Led(potmessage == 0);
+                    break;
+
+                case 2:  // Toggle Button
+                    if (potmessage == 0) {
+                        POTS[i]->Ptoggle = !POTS[i]->Ptoggle;
+
+                        if (POTS[i]->Ptoggle) {
+                            midiControlChange(POTS[i]->Pcontrol, 127, POTS[i]->Pchannel);
+                        } else {
+                            midiControlChange(POTS[i]->Pcontrol, 0, POTS[i]->Pchannel);
+                        }
+                        POTS[i]->Led(POTS[i]->Ptoggle);
+                    }
+                    break;
             }
         }
     }
@@ -324,6 +349,7 @@ void savePots() {
         POTS[i]->calSave(i * sizeof(int) * 2);
     }
 }
+
 bool buttonPushed(byte buttonPin) {
     return (digitalRead(buttonPin) == LOW);
 }

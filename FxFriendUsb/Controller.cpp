@@ -16,10 +16,7 @@ Mux::Mux(byte outpin_, byte numPins_, bool analog_) {
     if (numPins > 8) pinMode(5, OUTPUT);
 }
 //****************************************************************************************
-// Button (Pin Number, Command, Note Number, Channel, Debounce Time)
-Button::Button(byte pin, byte command, byte value, byte channel, byte debounce) {
-    _pin = pin;
-    pinMode(_pin, INPUT_PULLUP);
+void Button::init(byte command, byte value, byte channel, byte debounce) {
     _value = value;
     _command = command;
     _debounce = debounce;
@@ -32,22 +29,18 @@ Button::Button(byte pin, byte command, byte value, byte channel, byte debounce) 
     Bchannel = channel;
     Btoggle = 0;
 }
+// Button (Pin Number, Command, Note Number, Channel, Debounce Time)
+Button::Button(byte pin, byte command, byte value, byte channel, byte debounce) {
+    init(command, value, channel, debounce);
+    _pin = pin;
+    pinMode(_pin, INPUT_PULLUP);
+}
 
 Button::Button(Mux mux, byte muxpin, byte command, byte value, byte channel, byte debounce) {
+    init(command, value, channel, debounce);
     _pin = mux.outpin;
     _numMuxPins = mux.numPins;
     _muxpin = muxpin;
-    _value = value;
-    _command = command;
-    _debounce = debounce;
-    _time = 0;
-    _busy = false;
-    _status = 0b00000010;
-    _last = 1;
-    Bcommand = command;
-    Bvalue = value;
-    Bchannel = channel;
-    Btoggle = 0;
 }
 
 void Button::muxUpdate() {
@@ -61,13 +54,14 @@ void Button::muxUpdate() {
 }
 
 byte Button::getValue() {
-    // If BUSY bit not set - read button
+    // If BUSY bit not set - read button.
     if (bitRead(_status, 0) == false) {  // If busy false
-        if (digitalRead(_pin) == _last)
-            return 2;  // If same as last state - exit
+        if (digitalRead(_pin) == _last) {
+            return 255;  // If same as last state - exit.
+        }
     }
 
-    // If NEW Bit set - Key just pressed, record time
+    // If NEW Bit set - Key just pressed, record time.
     if (bitRead(_status, 1) == true) {  // If new is true
         bitSet(_status, 0);             // Set busy TRUE
         bitClear(_status, 1);           // Set New FALSE
@@ -76,18 +70,18 @@ byte Button::getValue() {
     }
 
     // Check if debounce time has passed - If no, exit
-    if (millis() - _time < _debounce) return 255;
-
-    // Debounce time has passed. Read pin to see if still set the same
-    // If it has changed back - assume false alarm
-    if (digitalRead(_pin) == _last) {
-        bitClear(_status, 0);  // Set busy false
-        bitSet(_status, 1);    // Set new true
+    if (millis() - _time < _debounce) {
         return 255;
     }
 
-    // If this point is reached, event is valid. return event type
-    else {
+    // Debounce time has passed. Read pin to see if still set the same.
+    // If it has changed back - assume false alarm.
+    if (digitalRead(_pin) == _last) {
+        bitClear(_status, 0);  // Set busy false.
+        bitSet(_status, 1);    // Set new true.
+        return 255;
+    } else {
+        // If this point is reached, event is valid. Return event type.
         bitClear(_status, 0);             // Set busy false
         bitSet(_status, 1);               // Set new true
         _last = ((~_last) & 0b00000001);  // invert _last
@@ -109,8 +103,7 @@ void Button::Led(bool on) {
 }
 
 //********************************************************************
-Pot::Pot(byte pin, byte command, byte control, byte channel) {
-    _pin = pin;
+void Pot::init(byte command, byte control, byte channel) {
     _control = control;
     _cal = false;
     _calHigh = 1023;
@@ -119,12 +112,19 @@ Pot::Pot(byte pin, byte command, byte control, byte channel) {
     _value = _value >> 3;
     _oldValue = _value << 3;
     _value = _value << 3;
+    _previous = 1;
     Pcommand = command;
     Pcontrol = control;
     Pchannel = channel;
+    Ptoggle = false;
+}
+Pot::Pot(byte pin, byte command, byte control, byte channel) {
+   init(command, control, channel);
+    _pin = pin;
 }
 Pot::Pot(byte pin, byte command, byte control, byte channel, byte led_pin) {
-    Pot(pin, command, control, channel);
+    init( command, control, channel);
+    _pin = pin;
     _led_pin = led_pin;
     _led_type = 1;  // 0=none; 1=normal; 2=mux;
 }
@@ -141,27 +141,12 @@ void Pot::muxUpdate() {
 }
 
 Pot::Pot(Mux mux, byte muxpin, byte command, byte control, byte channel) {
+    init(command, control, channel);
     _pin = mux.outpin;
     _numMuxPins = mux.numPins;
     _muxpin = muxpin;
     _control = control;
-    muxUpdate();
-    _value = analogRead(_pin);
-    _value = _value >> 3;
-    _oldValue = _value << 3;
-    _value = _value << 3;
-    Pcommand = command;
-    Pcontrol = control;
-    Pchannel = channel;
 }
-/*void Pot::Led(byte pin){
-	_led_pin=pin;
-}*/
-/*void Pot::Led(Mux mux, byte muxpin){
-	_led_pin = mux.outpin;
-	_led_numMuxPins = mux.numPins;
-	_led_muxpin = muxpin;
-} */
 void Pot::Led(bool on) {
     switch (_led_type) {
         case 1:
@@ -172,9 +157,44 @@ void Pot::Led(bool on) {
             }
             break;
         case 2:
-            // Do mux led.
+            // Do mux led. (somehow)
             break;
     }
+}
+byte Pot::getValue() {
+    _value = analogRead(_pin);
+    // Apply calibration (this is just a simplified version of the map() function).
+    // (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+    //_value = ((_value - _calLow) * (int)1023) / (_calHigh - _calLow); // Does not work. I don't know why.
+    _value = map(_value, _calLow, _calHigh, 0, 1023);
+
+    // Apply upper and lower limits for if it overshot (otherwise we get over/under flow).
+    if (_value > 1023) {
+        _value = 1023;
+    } else if (_value < 0) {
+        _value = 0;
+    }
+
+    int diff = (_oldValue - _value);
+    if (diff >= 8 || diff <= -8) {
+        _oldValue = _value >> 3;
+        _oldValue = _oldValue << 3;
+        if (Pcommand == 0) {
+			// Regular analogue control behavior.
+            return _value >> 3;
+        } else {
+			// Button behaviour.
+            byte newval = _value >> 3;
+            if (newval >= 64 && _previous < 64) {
+				_previous = newval;
+                return 0;  // Pressed.
+            } else if (newval < 64 && _previous >= 64) {
+				_previous = newval;
+                return 1;  // Released.
+            }
+        }
+    }
+    return 255;
 }
 
 void Pot::calibrate() {
@@ -221,28 +241,6 @@ void Pot::calSave(int iAddress) {
     if (iVal != _calHigh) {
         EEPROM.put(iAddress, _calHigh);
     }
-}
-byte Pot::getValue() {
-    _value = analogRead(_pin);
-    // Apply calibration (this is just a simplified version of the map() function).
-    // (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-    //_value = ((_value - _calLow) * (int)1023) / (_calHigh - _calLow); // Does not work. I don't know why.
-    _value = map(_value, _calLow, _calHigh, 0, 1023);
-
-    // Apply upper and lower limits for if it overshot (otherwise we get over/under flow).
-    if (_value > 1023) {
-        _value = 1023;
-    } else if (_value < 0) {
-        _value = 0;
-    }
-
-    int diff = (_oldValue - _value);
-    if (diff >= 8 || diff <= -8) {
-        _oldValue = _value >> 3;
-        _oldValue = _oldValue << 3;
-        return _value >> 3;
-    }
-    return 255;
 }
 
 void Pot::newValue(byte command, byte value, byte channel) {
